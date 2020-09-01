@@ -1,0 +1,197 @@
+--[[ FREE USE EDITING IS ALLOWED ]]--
+
+--// SUKI-UI \\--
+
+warn("Created by Estsuki / Est#0003")
+
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+
+local TimeSets = {
+	ProfileTime = time()
+}
+
+local Services = {
+	RS = game:GetService("RunService"),
+	ContentP = game:GetService("ContentProvider")
+}
+
+local UpdateText = "1.0.0\nScript Created!"
+
+--// LOADSTRING FUNCTION \\--
+
+LS = function(script)
+	return loadstring(script)()
+end
+
+--// WRITE FILE \\--
+
+local Settings = {
+	AdminBarKey = Enum.KeyCode.LeftAlt
+}
+
+local StarterWriteFile = 'local Settings = {\n	AdminBarKey = Enum.KeyCode.LeftAlt\n} \nreturn Settings'
+
+if not isfile("SukiUISettings.lua") then
+	writefile("SukiUISettings.lua", StarterWriteFile)
+else
+	Settings = LS(readfile("SukiUISettings.lua"))
+end
+
+for a,b in pairs(Settings) do
+	print(b)
+end
+
+--// TWEEN FUNCTION \\--
+
+Tween = function(obj,props,time,easing,direction,repeats,backwards)
+	local info = TweenInfo.new(time or .5, easing or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out, repeats or 0, backwards or false)
+	local tween = game:GetService("TweenService"):Create(obj, info, props)
+	tween:Play()
+end
+
+--// UI STUFF \\--
+
+local CoreUI = game.CoreGui
+
+local RobloxUI = CoreUI.RobloxGui
+
+for _,ob in pairs(RobloxUI:GetChildren()) do
+	if ob.Name == "StartUpUI" then
+		ob:Destroy()
+	end
+end
+
+local LuigiImage = nil
+
+local LuigiTextures
+
+local Frame = 1
+
+--// RENDERSTEPPED \\--
+
+Services.RS.RenderStepped:Connect(function()
+	if time() - TimeSets.ProfileTime >= 0.08 and LuigiImage ~= nil then 
+		LuigiImage.Image = LuigiTextures[Frame]
+		Frame = Frame + 1; if Frame >= 30 then Frame = 1 end
+		TimeSets.ProfileTime = time()
+	end
+end)    
+
+--// STEPPED \\--
+
+spawn(function()
+	
+	
+	--load
+	
+	local UI_ID = 5638284326
+	
+	local ScreenX,ScreenY = RobloxUI.AbsoluteSize.X, RobloxUI.AbsoluteSize.Y
+	
+	local UI = game:GetObjects("rbxassetid://"..UI_ID)[1]
+	
+	--480 1920/480 
+	
+	local UILength = 420/ScreenX
+	
+	local UIWidth = 520/ScreenY
+	
+	--print(UIWidth)
+	
+	UI.Size = UDim2.new(UILength, 0, UIWidth, 0)
+	UI.Position = UDim2.new(0.5 - UILength/2, 0, 0.5 - UIWidth/2, 0)
+	
+	local UIObjects = {
+		TitleStart = UI.Title_Start,
+		TitleEnd = UI.Title_Start.Title_End,
+		CreditsFolder = UI.Credits,
+		UpdateTop = UI.Updates,
+		UpdateText = UI.UText,
+		EndButton = UI.EndUI,
+		EndButtonT = UI.EndUI.T
+	}
+	
+	--loading stuff for animations
+	
+	local LuigiLink = "https://raw.githubusercontent.com/Estsuki/Scripts/master/LuigiDancingGif.lua"
+	
+	local LuigiDecals = LS(game:HttpGet(LuigiLink))
+	
+	LuigiTextures = {}
+	
+	for a,b in pairs(LuigiDecals) do table.insert(LuigiTextures, game:GetObjects("rbxassetid://"..b)[1].Texture) end
+	
+	local Preload = {}
+	
+	table.insert(Preload, "http://www.roblox.com/asset/?id=5638390589");table.insert(Preload, "http://www.roblox.com/asset/?id=5638432976")
+	
+	Services.ContentP:PreloadAsync(LuigiTextures, nil); Services.ContentP:PreloadAsync(Preload, nil)
+	
+	UI.Transparency = 1; UI.ClipsDescendants = true
+	
+	UIObjects.UpdateTop.TextTransparency = 1
+	UIObjects.UpdateText.TextTransparency = 1
+	UIObjects.EndButton.BackgroundTransparency = 1
+	UIObjects.EndButtonT.TextTransparency = 1
+	
+	UIObjects.UpdateText.Text = UpdateText
+	
+	UIObjects.EndButton.Position = UDim2.new(0.03, 0, 1, 0)
+	
+	UIObjects.TitleStart.Position = UDim2.new(0, 0, -0.15, 0); UIObjects.TitleStart.TextTransparency = 1; UIObjects.TitleEnd.TextTransparency = 1
+	
+	for a,b in pairs(UIObjects.CreditsFolder:GetChildren()) do
+		if b.T.Value == "Luigi" then
+			LuigiImage = b.Image
+		end    
+		local q = 0.05 + 0.12 * a
+		-- if a == 1 then q =  0.15 end
+		local bool = a % 2 == 0
+		if bool == true then
+			b.Position = UDim2.new(0.5, 0, q)
+		else
+			b.Position = UDim2.new(-0.5, 0, q)
+		end
+		b.N.Selectable = true
+		b.TextTransparency = 1
+		b.N.TextTransparency = 1
+		b.Image.ImageTransparency = 1
+		b.Image.BackgroundTransparency = 1
+	end
+	
+	
+	wait(3)
+	
+	UI.Parent = RobloxUI
+	
+	--start animations
+	
+	Tween(UI,{Transparency = 0},2,Enum.EasingStyle.Quint,Enum.EasingDirection.InOut)
+	
+	wait(1)
+	
+	Tween(UIObjects.TitleStart,{Position = UDim2.new(0,0,0,0), TextTransparency = 0},1.5,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+	Tween(UIObjects.TitleEnd,{TextTransparency = 0},1.5,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+	
+	wait(0.5)
+	
+	for a,b in pairs(UIObjects.CreditsFolder:GetChildren()) do
+		local q = 0.05 + 0.12 * a
+		--if a == 1 then q =  0.15 end
+		Tween(b,{Position = UDim2.new(0,0,q,0), TextTransparency = 0},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+		Tween(b.N,{TextTransparency = 0},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+		Tween(b.Image,{ImageTransparency = 0, BackgroundTransparency = 0},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+		wait(0.5)
+	end
+	
+	Tween(UIObjects.UpdateTop,{TextTransparency = 0},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+	wait(0.5)
+	Tween(UIObjects.UpdateText,{TextTransparency = 0},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+	wait(0.5)
+	Tween(UIObjects.EndButton,{BackgroundTransparency = 0, Position = UDim2.new(0.03,0,0.9,0)},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+	Tween(UIObjects.EndButtonT,{TextTransparency = 0},1,Enum.EasingStyle.Quint,Enum.EasingDirection.Out)
+	UIObjects.EndButton.MouseButton1Click:Connect(function()
+		UI:Destroy()
+	end)
+end)
