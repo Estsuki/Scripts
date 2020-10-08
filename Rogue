@@ -1,0 +1,110 @@
+if game.CoreGui:FindFirstChild("G") then
+game.CoreGui:FindFirstChild("G"):Destroy()
+end
+
+if _G.Bruh then
+    _G.Bruh:Disconnect()
+end
+
+if game.Players.LocalPlayer.PlayerGui.StartMenu:FindFirstChild("Overlay") then
+game.Players.LocalPlayer.PlayerGui.StartMenu:FindFirstChild("Overlay"):Destroy()
+end
+
+workspace.CurrentCamera:Destroy()
+
+local NewUI = Instance.new("ScreenGui", game.CoreGui)
+
+NewUI.Name = "G"
+
+local PlayersList = Instance.new("ScrollingFrame", NewUI)
+
+PlayersList.Size = UDim2.new(0.15, 0, 0.8, 0)
+
+PlayersList.Position = UDim2.new(0.85, 0, 0.1, 0)
+
+local UIList = Instance.new("UIListLayout", PlayersList)
+
+PlayersList.BackgroundTransparency = 1
+
+PlayersList.ScrollBarThickness = 0
+
+PlayersList.BorderSizePixel = 0
+
+PlayersList.CanvasSize = UDim2.new(0, 0, 2, 0)
+
+local PlayerFunctions = {}
+
+PlayerFunctions.Add = function(Name)
+    local TextButton = Instance.new("TextButton")
+    TextButton.BorderSizePixel = 0
+    TextButton.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    TextButton.Size = UDim2.new(1, 0, 0.015, 0)
+    TextButton.Name = Name
+    TextButton.Font = Enum.Font.GothamSemibold
+    TextButton.TextSize = 15
+    TextButton.TextColor3 = Color3.new(1,1,1)
+    --TextButton.BackgroundTransparency = 0.5
+    local UI_Round = Instance.new("UICorner", TextButton)
+
+    UI_Round.CornerRadius = UDim.new(0.2, 0)
+    TextButton.Text = Name.." - ".." NA"
+    
+    local Pl = Instance.new("ObjectValue", TextButton)
+    Pl.Value = game.Players:FindFirstChild(Name)
+    Pl.Name = "Pl"
+    
+    TextButton.MouseButton1Click:Connect(function()
+        if not Pl.Value.Character then return end
+        workspace.CurrentCamera.CameraSubject = Pl.Value.Character.Humanoid
+        workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+        for a,b in pairs(Pl.Value.Character:GetDescendants()) do
+            if b.Name == "FakeHumanoid" then
+                b.DisplayDistanceType = "None"
+            end
+        end
+    end)
+    TextButton.Parent = PlayersList
+end
+
+PlayerFunctions.Remove = function(Name)
+    if PlayersList:FindFirstChild(Name) then
+        PlayersList:FindFirstChild(Name):Destroy()
+    end
+end
+
+for a,b in pairs(game.Players:GetPlayers()) do
+    PlayerFunctions.Add(b.Name)
+end
+
+game.Players.PlayerAdded:Connect(function(Player)
+    PlayerFunctions.Add(Player.Name)
+end)
+
+game.Players.PlayerRemoving:Connect(function(Player)
+    PlayerFunctions.Remove(Player.Name)
+end)
+
+game:GetService("RunService").RenderStepped:Connect(function()
+    for a,b in pairs(PlayersList:GetChildren()) do
+        if b:IsA("TextButton") then
+            local Player = b.Pl.Value
+            if Player.Character then
+                local Speed = math.round(Player.Character.Torso.Velocity.Magnitude)
+                b.Text = Player.Name.." - "..math.round(Player.Character.Torso.Velocity.Magnitude)
+                if Speed >= 150 then
+                    b.TextColor3 = Color3.new(1, 0, 0)
+                else
+                    b.TextColor3 = Color3.new(1, 1, 1)
+                end
+            else
+                b.Text = Player.Name.." - ".."NA"
+            end
+        end
+    end
+end)
+
+_G.Bruh = game.Players.LocalPlayer.Chatted:Connect(function(C)
+    if string.lower(C) == "serverhop" then
+        game:GetService("TeleportService"):Teleport(3016661674, game.Players.LocalPlayer)
+    end
+end)
