@@ -1,0 +1,778 @@
+-- // NEBULA \\ --
+
+local NSystem = {}
+getgenv().NSystem = NSystem
+
+-- // FILE EXTENSIONS \\ --
+
+getgenv().FileExtension = ".nb"
+
+NSystem.ConfigFileNames = {
+    ["AL"]  = "AimlockConfig",
+    ["CMD"] = "CMDBarConfig",
+    ["TH"]  = "ThemeConfig",
+}
+
+-- // SERVICES \\ --
+
+NSystem.Services = {
+    ["Players"]           = game:GetService("Players"),
+    ["ReplicatedStorage"] = game:GetService("ReplicatedStorage"),
+    ["Workspace"]         = game:GetService("Workspace"),
+    ["HTTP"]              = game:GetService("HttpService"),
+    ["CORE"]              = game:GetService("CoreGui"),
+    ["UIS"]               = game:GetService("UserInputService"),
+    ["RS"]                = game:GetService("RunService"),
+    ["TS"]                = game:GetService("TeleportService")
+}
+
+-- // ENCODE AND DECODE \\ --
+
+getgenv().Encode = function(Table, Return)
+    if Table then
+		local EncodedTable = {}
+		for a,b in pairs(Table) do
+			local Value
+			if typeof(b) == "table" then
+				Value = module.Encode(b, true)
+			elseif typeof(b) == "Color3" then
+				Value = {R = math.floor(b.R * 255), G = math.floor(b.G * 255), B = math.floor(b.B * 255)}
+			elseif typeof(b) == "Vector3" then
+				Value = {X = math.floor(b.X), Y = math.floor(b.Y), Z = math.floor(b.Z)}
+			else
+				Value = b
+			end
+			
+			EncodedTable[a] = {Class = typeof(b), Value = Value}
+		end
+		
+		return (Return and EncodedTable) or NSystem.Services["HTTP"]:JSONEncode(EncodedTable)
+	end
+end
+
+getgenv().Decode = function(Table, Return)
+    if Table then
+		Table = (not Return and NSystem.Services["HTTP"]:JSONDecode(Table)) or Table
+		local DecodedTable = {}
+		for a,b in pairs(Table) do
+			local Value
+			if b.Class == "table" then
+				Value = module.Decode(b.Value, true) or {}
+			elseif b.Class == "Color3" then
+				Value = Color3.fromRGB(b.Value.R, b.Value.G, b.Value.B)
+			elseif b.Class == "Vector3" then
+				Value = Vector3.new(b.Value.X, b.Value.Y, b.Value.Z)
+			else
+				Value = b.Value
+			end
+			
+			DecodedTable[a] = Value
+		end
+		
+		return DecodedTable
+	end
+end
+
+-- // VARIABLES \\ --
+
+getgenv().Player = NSystem.Services["Players"].LocalPlayer
+getgenv().Mouse = Player:GetMouse()
+getgenv().Camera = NSystem.Services["Workspace"].CurrentCamera
+
+-- // PRE-INSTANCES \\ --
+
+local AimlockHighlight = Instance.new("Highlight", NSystem.Services["CORE"])
+
+-- // TABLES \\ --
+
+getgenv().Commands = {}
+getgenv().ConfigFunctions = {}
+getgenv().CommandFunctions = {}
+getgenv().Connections = {}
+getgenv().CommandObjects = {}
+
+-- // TEMPORARY CACHE \\ --
+
+getgenv().Cache = {
+    Aimlock = false,
+    AimlockedPlayer = nil,
+    CurrentTool = nil,
+}
+
+-- // GLOBAL FUNCTIONS \\ -- can be used anywhere and aren't specific to one function type
+
+getgenv().GFunc = {}
+
+GFunc.LS = function(script)
+	return loadstring(script)()
+end
+
+GFunc.RandomString = function()
+	local Length = math.random(15, 23)
+	local Array = {}
+	for i = 1, Length do
+		Array[i] = string.char(math.random(32, 126))
+	end
+	
+	return table.concat(Array)
+end
+
+GFunc.Tween = function(obj,props,time,easing,direction,repeats,backwards)
+	local info = TweenInfo.new(time or .5, easing or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out, repeats or 0, backwards or false)
+	local tween = game:GetService("TweenService"):Create(obj, info, props)
+	tween:Play()
+end
+
+GFunc.FindInTableByIndex = function(Table, Index)
+    for a,b in pairs(Table) do
+        if a == Index then
+            return a, b
+        end
+    end; return false
+end
+
+GFunc.FindNearestPlayerByMouse = function(Whitelist)
+    local Players = {}; local D = {}; PlayerInformation = {};
+    for __, P in pairs(NSystem.Services["Players"]:GetPlayers()) do
+        if P ~= Player then
+            table.insert(Players, P)
+        end
+    end
+    for __, P in pairs(Players) do
+        if P and P.Character then -- whitelist here
+            local C = P.Character
+            local AimAtPart = C:FindFirstChild(AimlockConfig.AimAt)
+            if AimAtPart then
+                local Dis = (AimAtPart.Position - Camera.CoordinateFrame.p).magnitude
+                local R = Ray.new(Camera.CoordinateFrame.p, (Mouse.Hit.p - Camera.CoordinateFrame.p).unit * Dis)
+                local __, HitPosition = NSystem.Services["Workspace"]:FindPartOnRay(R, NSystem.Services["Workspace"])
+                local Difference = math.floor((HitPosition - AimAtPart.Position).magnitude)
+                PlayerInformation[P.Name] = {}
+                PlayerInformation[P.Name].D = Dis
+                PlayerInformation[P.Name].P = P
+                PlayerInformation[P.Name].DI = Difference
+                table.insert(D, Difference)
+            end
+        end
+    end
+    if unpack(D) == nil then
+        return false
+    end
+    local LowestDistance = math.floor(math.min(unpack(D)))
+    if LowestDistance > 20 then
+        return false
+    end
+    for __, P in pairs(PlayerInformation) do
+        if P.DI == LowestDistance then
+            return P.P
+        end
+    end
+    return false
+end
+
+GFunc.PlaySound = function(ID)
+    local NewS = Instance.new("Sound", NSystem.Services["Workspace"])
+    NewS.SoundId = ID
+    NewS:Play(); game:GetService("Debris"):AddItem(NewS, 5)
+    print("Played Sound")
+end
+
+GFunc.CreateBeam = function(P1, P2, Color, Time)
+    local Part1 = Instance.new("Part", workspace.EffectsJunk)
+    Part1.Name = "P1"; Part1.Size = Vector3.new(0.05, 0.05, 0.05)
+    local Att = Instance.new("Attachment", Part1); Part1.Anchored = true; Part1.CanCollide = false
+    local Part2 = Part1:Clone(); Part2.Parent = workspace.EffectsJunk
+    
+    Part1.Position = P1; Part2.Position = P2
+    
+    local Beam = Instance.new("Beam", Part1)
+    Beam.Color = ColorSequence.new(Color)
+    Beam.Transparency = NumberSequence.new(0)
+    Beam.LightEmission = 1
+    Beam.Width0 = 0.15; Beam.Width1 = 0.15
+    Beam.Attachment0 = Part1.Attachment;
+    Beam.Attachment1 = Part2.Attachment
+    Beam.FaceCamera = true
+    
+    game:GetService("Debris"):AddItem(Part1, Time)
+    game:GetService("Debris"):AddItem(Part2, Time)
+end
+
+-- // CONFIG FUNCTIONS \\ --
+
+ConfigFunctions.SaveConfig = function(ConfigTable, FileName)
+    writefile(FileName .. FileExtension, Encode(ConfigTable))
+end
+
+ConfigFunctions.LoadConfig = function(ConfigTable, FileName, isDefaultLoad)
+    local __ = ConfigTable
+    ConfigTable = getgenv()[ConfigTable]
+    local LoadedConfigTable
+    
+    local fileCheck = isfile(FileName .. FileExtension)
+    if fileCheck then
+        LoadedConfigTable = Decode(readfile(FileName .. FileExtension))
+    else
+        ConfigFunctions.SaveConfig(ConfigTable, FileName)
+        LoadedConfigTable = ConfigTable
+    end
+    if isDefaultLoad and fileCheck then
+       -- add to config changes
+        for VariableName, VariableContents in pairs(ConfigTable) do
+            if not LoadedConfigTable[VariableName] then
+                print("Added " .. VariableName .. " to config: " .. FileName .. FileExtension)
+                LoadedConfigTable[VariableName] = VariableContents
+            end
+        end
+       
+       -- save config after changes
+       
+        ConfigFunctions.SaveConfig(LoadedConfigTable, FileName)
+    end
+    getgenv()[__] = LoadedConfigTable
+end
+
+-- // THEME - CONFIG \\ --
+
+getgenv()["ThemeConfig"] = {
+    ThemeColor = Color3.fromRGB(102, 51, 255),
+    HitSound = "2868331684",
+    CritSound = "2320331820",
+}; ConfigFunctions.LoadConfig("ThemeConfig", NSystem.ConfigFileNames["TH"], true)
+
+getgenv().SetThemeColor = function(C3)
+    CMDUI.MainFrame.UIStroke.Color = C3
+    CMDUI.MainFrame.CommandBar.UIStroke.Color = C3
+    CMDUI.MainFrame.CommandBar.UIGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)), ColorSequenceKeypoint.new(1, C3)})
+    CMDUI.MainFrame.CMDS.ScrollBarImageColor3 = C3
+    CMDUI.Copy.CMDFrame.CMD.TextColor3 = C3
+    CMDUI.MainFrame.Command.PlaceholderColor3 = C3
+    
+    CMDUI.CMDDescription.UIStroke.Color = C3
+    CMDUI.CMDDescription.CommandBar.UIStroke.Color = C3
+    CMDUI.CMDDescription.CommandBar.UIGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)), ColorSequenceKeypoint.new(1, C3)})
+    
+    AimlockHighlight.OutlineColor = C3
+    AimlockHighlight.FillColor = C3
+    
+    for _, Command in pairs(CommandObjects) do
+        Command.CMD.TextColor3 = C3
+    end
+end
+
+-- // AIMLOCK - CONFIG \\ --
+
+getgenv()["AimlockConfig"] = {
+    Key = "V",
+    State = true,
+    AimAt = "Head",
+    AimThroughWalls = true,
+    DistanceTilSnap = 30,
+    UseVelocity = true,
+    VelocityDiv = 7.5,
+    ProjDiv = 2,
+}; ConfigFunctions.LoadConfig("AimlockConfig", NSystem.ConfigFileNames["AL"], true)
+
+-- // CMD - CONFIG \\ --
+
+getgenv()["CMDBarConfig"] = {
+    Key = "Quote",
+    CommandAlign = "Left",
+}; ConfigFunctions.LoadConfig("CMDBarConfig", NSystem.ConfigFileNames["CMD"], true)
+
+-- // CMD - BAR \\ --
+
+getgenv().CMDUI   = game:GetObjects("rbxassetid://9970590227")[1];
+CMDUI.Enabled = false
+CMDUI.Name    = GFunc.RandomString(); syn.protect_gui(CMDUI);
+CMDUI.Parent  = NSystem.Services["CORE"];
+
+SetThemeColor(ThemeConfig.ThemeColor)
+
+CMDUI.MainFrame.Position = UDim2.new(0.5, 0, 2, 0)
+CMDUI.Enabled = true
+
+local CMDTextBox = CMDUI.MainFrame.Command
+
+Connections.TextChanged = CMDTextBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local CurrentText = CMDTextBox.Text
+    if CurrentText == "" or CurrentText == " " then 
+    CMDUI.MainFrame.CMDSuggestions.Visible = false
+    CMDUI.MainFrame.CMDS.Visible = true    
+    return 
+    end
+    local C = CMDUI.MainFrame.CMDSuggestions:GetChildren()
+    local P = 0
+    for i = 1, #C do
+        local CMD = C[i]
+        if string.find(CMD.Name, string.split(string.lower(CurrentText), " ")[1]) then
+            CMD.Position = UDim2.new(0, 0, 0, (P * 22))
+            P = P + 1
+			if P >= 7 then
+				CMD.Position = UDim2.new(0, 0, 0, 69420)
+				P = P - 1
+			end
+		else 
+			CMD.Position = UDim2.new(0, 0, 0, 69420)
+        end
+    end
+    CMDUI.MainFrame.CMDSuggestions.Visible = true
+    CMDUI.MainFrame.CMDS.Visible = false
+end)
+
+-- // CMD - BAR(FUNCTIONS) \\ --
+
+getgenv().AddCommandData = function(CommandName, CommandDescription, CommandArgs)
+    if not CommandDescription then CommandDescription = "No Description" end
+    local newDataFrame = CMDUI.Copy.CMDFrame:Clone()
+    newDataFrame.Name = CommandName; newDataFrame:SetAttribute("Description", CommandDescription)
+    local Text = '[<font color="#FFFFFF"><b>' .. CommandName .. '</b></font>] '
+    
+    if CommandArgs then
+        for i = 1, #CommandArgs do
+            Text = Text .. '(<font color="#FFFFFF">' .. CommandArgs[i] .. '</font>)' 
+        end
+    else
+       Text = Text .. '<font color="#696969">(no args)</font>'  
+    end
+    newDataFrame.CMD.Text = Text
+    
+    if CMDBarConfig.CommandAlign == "Center" then
+        newDataFrame.CMD.TextXAlignment = "Center"
+    end
+    
+    local Suggestion = newDataFrame:Clone()
+    Suggestion.Visible = true
+    Suggestion.Parent = CMDUI.MainFrame.CMDSuggestions
+    table.insert(CommandObjects, Suggestion)
+    
+    newDataFrame.Visible = true
+    newDataFrame.Parent = CMDUI.MainFrame.CMDS
+    table.insert(CommandObjects, newDataFrame)
+end
+
+getgenv().DescriptionRS = function()
+	local A = NSystem.Services["CORE"]:GetGuiObjectsAtPosition(Mouse.X, Mouse.Y)
+	local SelectedCommand
+	for __, Frame in pairs(A) do
+		if Frame:IsA("Frame") and Frame.Parent == CMDUI.MainFrame.CMDS or Frame.Parent == CMDUI.MainFrame.CMDSuggestions then
+			SelectedCommand = Frame
+		end
+	end
+	if SelectedCommand then
+	    CMDUI.CMDDescription.CMDName.Text = "<b>" .. SelectedCommand.Name .. "</b>"
+	    if SelectedCommand:GetAttribute("Description") then
+	         CMDUI.CMDDescription.CMDDescription.Text = SelectedCommand:GetAttribute("Description")
+	    end
+	    CMDUI.CMDDescription.Visible = true
+	else
+	    CMDUI.CMDDescription.Visible = false
+	end
+end
+
+-- // COMMAND FUNCTIONS \\ --
+
+CommandFunctions.AddCommand = function(Data)
+    if not Data.Function then
+        warn("AddCommand Error: No Function!")
+    end
+    if not Data.Name then
+        warn("AddCommand Error: No Command Name!")
+    else
+        Data.Name = string.lower(Data.Name)
+    end
+    if not Data.Description then
+        warn("AddCommand Error: No Command Description!")
+    end
+    if Data.ARGS then
+        AddCommandData(Data.Name, Data.Description, Data.ARGS)
+    else
+        AddCommandData(Data.Name, Data.Description)
+    end
+    Commands[#Commands + 1] = Data
+end
+
+CommandFunctions.FindCommand = function(CMDName)
+    for CMDIndex, CMDData in pairs(Commands) do
+        if CMDData.Name == CMDName then
+            return CMDData.Function
+        end
+    end
+end
+
+CommandFunctions.FireCommandFromString = function(String)
+    local ARGS = string.split(string.lower(String), " "); local CMD = ARGS[1]; table.remove(ARGS, 1)
+    local CMDFunc = CommandFunctions.FindCommand(CMD)
+    if CMDFunc then
+        xpcall(function() CMDFunc(table.unpack(ARGS)) end, function(Error)
+			warn("Command Error: " .. CMD .. "\n" .. Error)
+		end)
+    end
+end
+
+-- // AIMLOCK \\ --
+
+AimlockHighlight.FillTransparency = 0.7; AimlockHighlight.DepthMode = "AlwaysOnTop"
+
+AimlockRS = function(DT)
+    if AimlockConfig.State == false then return end
+    if Cache.Aimlock == false then 
+        AimlockHighlight.OutlineTransparency = math.clamp(AimlockHighlight.OutlineTransparency + (DT * 2), 0, 1)
+        AimlockHighlight.FillTransparency = math.clamp(AimlockHighlight.FillTransparency + (DT * 2), 0.7, 1)
+        return 
+    end
+    local Target 
+    if Cache.AimlockedPlayer then
+        Target = Cache.AimlockedPlayer
+    else
+        Target = GFunc.FindNearestPlayerByMouse()
+        if Target then
+            Cache.AimlockedPlayer = Target
+        end
+    end
+    if Target then
+        AimlockHighlight.Adornee = Target.Character
+        local AimAtPart = Target.Character:FindFirstChild(AimlockConfig.AimAt)
+        if AimAtPart then
+            if not ObtainedCWInformation.FirePoint or not Cache.CurrentTool or (Cache.CurrentTool and not CombatWarriorsSpeeds[Cache.CurrentTool.Name]) or (Camera.CoordinateFrame.p - Target.Character.HumanoidRootPart.Position).magnitude <= AimlockConfig.DistanceTilSnap then
+                Camera.CoordinateFrame = CFrame.new(Camera.CoordinateFrame.p, AimAtPart.CFrame.p)
+            else
+                Camera.CoordinateFrame = CFrame.new(Camera.CoordinateFrame.p, getgenv().AimlockCalculate(AimAtPart, getgenv().ObtainedCWInformation.FirePoint.WorldPosition, getgenv().ObtainedCWInformation.ProjectileVelocity / AimlockConfig.ProjDiv))
+            end
+            local Characters = {}
+            for __, P in pairs(NSystem.Services["Players"]:GetPlayers()) do
+                if P and P.Character then
+                    table.insert(Characters, P.Character)
+                end
+            end
+            
+            local R = Ray.new(Camera.CoordinateFrame.p, (AimAtPart.Position - Camera.CoordinateFrame.p).unit * (AimAtPart.Position - Camera.CoordinateFrame.p).magnitude)
+            local Hit, HitPosition = NSystem.Services["Workspace"]:FindPartOnRayWithIgnoreList(R, Characters)
+            if Hit then
+                AimlockHighlight.OutlineTransparency = math.clamp(AimlockHighlight.OutlineTransparency - (DT * 2), 0, 1)
+                AimlockHighlight.FillTransparency = math.clamp(AimlockHighlight.FillTransparency - (DT * 2), 0.7, 1)
+            else
+                AimlockHighlight.OutlineTransparency = math.clamp(AimlockHighlight.OutlineTransparency + (DT * 2), 0, 1)
+                AimlockHighlight.FillTransparency = math.clamp(AimlockHighlight.FillTransparency + (DT * 2), 0.7, 1)
+            end
+        end
+    else
+        AimlockHighlight.Adornee = nil
+    end
+end
+
+-- // COMBAT WARRIORS \\ --
+
+getgenv().CWModules = {}
+
+local Garbage = getgc(true)
+for i = 1, #Garbage do
+    local Item = Garbage[i]
+    if type(Item) == 'table' and rawget(Item, 'InvokeServer') and type(Item.InvokeServer) == 'function' then
+	    CWModules["Network"] = getsenv(getfenv(Item.InvokeServer).script)
+    end
+end -- THANKS JACK 
+
+-- [ HOOKING ARROW HITS ] --
+
+local SavedFirePoint = nil
+
+local Raw = getrawmetatable(game); setreadonly(Raw, false)
+local CallingScript = getcallingscript; local Caller = checkcaller
+local CMethod = getnamecallmethod; local Closure = newcclosure
+
+local oldNamecall; oldNamecall = hookmetamethod(game, '__namecall', function(self, ...)
+    -- same stuf youd usually do
+    local ARGS = {...}
+    if not checkcaller() then
+        if CMethod() == "FireServer" then
+            if self == CWModules["Network"]["GetEventHandler"]("RangedHit").Remote then
+                local Position = ARGS[3]
+                if SavedFirePoint then
+                    spawn(function() 
+                        if ARGS[2].Name == "Head" then
+                            GFunc.PlaySound("rbxassetid://" .. ThemeConfig.CritSound)
+                        else
+                            GFunc.PlaySound("rbxassetid://" .. ThemeConfig.HitSound)
+                        end
+                        
+                        GFunc.CreateBeam(SavedFirePoint, Position, ThemeConfig.ThemeColor, 3)
+                    end)
+                end
+                return oldNamecall(self, ...)
+            elseif self == CWModules["Network"]["GetEventHandler"]("RangedFire").Remote then
+                if ObtainedCWInformation.FirePoint then
+                    SavedFirePoint = ObtainedCWInformation.FirePoint.WorldPosition
+                end
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- // COMBAT WARRIORS AIMLOCK \\ --
+
+getgenv().ObtainedCWInformation = {
+    FirePoint = nil,
+    ProjectileVelocity = 400,
+}
+
+getgenv().CombatWarriorsSpeeds = {
+    ["Heavy Bow"] = 400,
+    ["Crossbow"] = 235,
+    ["Longbow"] = 200,
+    ["Kunai"] = 200,
+    ["RPG"] = 350, -- lol
+}
+
+getgenv().AimlockCalculate = function(Target, FirePoint, ProjectileVelocity)
+    local DistanceVector = (Target.Position - FirePoint)
+    local a = Target.Velocity:Dot(Target.Velocity) - (ProjectileVelocity * ProjectileVelocity)
+    local b = 2 * Target.Velocity:Dot(DistanceVector)
+    local c = DistanceVector:Dot(DistanceVector)
+    local p = -b / (2 * a)
+    local q = math.sqrt((b * b) - 4 * a * c) / (2 * a)
+    
+    local t1 = p - q
+    local t2 = p + q
+    local t
+    
+    if t1 > t2 and t2 > 0 then
+        t = t2
+    else
+        t = 1 
+    end
+    
+    return Target.Position + (Target.Velocity / AimlockConfig.VelocityDiv) * t
+end
+
+-- // CONNECTIONS \\ --
+
+CharacterAdded = function(Character)
+    -- [ TOOL ADDED ] --
+    
+    Character.ChildAdded:Connect(function(C)
+        if C:IsA("Tool") then
+            Cache.CurrentTool = C
+            
+            -- [ GET FIRE POINT ] --
+            
+            if CombatWarriorsSpeeds[C.Name] then
+                local Contents = C:FindFirstChild("Contents")
+                if Contents then
+                    local ToolHandle = Contents:FindFirstChild("Handle")
+                    if ToolHandle and ToolHandle:FindFirstChild("FirePoint") then
+                        ObtainedCWInformation.FirePoint = ToolHandle:FindFirstChild("FirePoint")
+                    end
+                end
+            end
+        end
+    end)
+    
+    Character.ChildRemoved:Connect(function(C)
+        if C:IsA("Tool") then
+            Cache.CurrentTool = nil
+        end
+    end)
+end; CharacterAdded(Player.Character)
+
+Connections.CharacterAdded = Player.CharacterAdded:Connect(CharacterAdded)
+
+local isReleased = false
+
+Connections.InputBegan = NSystem.Services["UIS"].InputBegan:Connect(function(Key, P)
+    if not P then
+        if Key.KeyCode == Enum.KeyCode[CMDBarConfig.Key] then
+            wait()
+            CMDTextBox:CaptureFocus()
+            isReleased = false
+            CMDUI.MainFrame:TweenPosition(UDim2.new(0.5, 0, 0.5, 0), "In", "Quint", 0.5, true)
+            local C = CMDUI.MainFrame.CMDS:GetChildren()
+            spawn(function()
+                wait(0.3)
+                for _, __ in pairs(C) do
+                    if __:IsA("Frame") then
+                        if CMDBarConfig.CommandAlign == "Left" then
+                            __.Size = UDim2.new(0, 0, 0, 20)
+                        end
+                        __.CMD.TextTransparency = 1
+                    end
+                end
+                for i = 1, #C do
+                    if isReleased then break end
+                    local CMD = C[i]
+                    if CMD:IsA("Frame") then
+                        if CMDBarConfig.CommandAlign == "Left" then
+                            CMD:TweenSize(UDim2.new(1, 0, 0, 20), "InOut", "Linear", 0.25, true)
+                        end
+                        GFunc.Tween(CMD.CMD, {TextTransparency = 0}, 0.25, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+                        wait(0.075)
+                    end
+                end
+            end)
+        elseif Key.KeyCode == Enum.KeyCode[AimlockConfig.Key] and Cache.Aimlock == false then
+            Cache.Aimlock = true
+        end
+    end
+end)
+
+Connections.InputEnded = NSystem.Services["UIS"].InputEnded:Connect(function(Key, P)
+    if not P then
+        if Key.KeyCode == Enum.KeyCode[AimlockConfig.Key] and Cache.Aimlock == true then
+            Cache.AimlockedPlayer = nil
+            Cache.Aimlock = false
+        end
+    end
+end)
+
+Connections.TBFR = CMDTextBox.FocusLost:Connect(function(Enter)
+    if Enter then
+        CommandFunctions.FireCommandFromString(CMDTextBox.Text)
+    end
+    CMDTextBox.Text = ""
+    isReleased = true
+    CMDUI.MainFrame:TweenPosition(UDim2.new(0.5, 0, 1.3, 0), "Out", "Quint", 0.5, true)
+end)
+
+-- // RENDER-STEPPED \\ --
+
+Connections.RS = NSystem.Services["RS"].Stepped:Connect(function(DT)
+    DescriptionRS(DT)
+    if CMDUI.CMDDescription.Visible == true then
+        CMDUI.CMDDescription.Position = UDim2.new(0, Mouse.X + 15, 0, Mouse.Y)
+    end
+end)
+NSystem.Services["RS"]:BindToRenderStep("AimlockRS", Enum.RenderPriority.Camera.Value - 1, AimlockRS)
+
+-- // COMMANDS \\ --
+
+CommandFunctions.AddCommand({
+    Function = function()
+        if #NSystem.Services["Players"]:GetPlayers() <= 1 then
+		    Player:Kick("\nRejoining...")
+		    wait()
+	        NSystem.Services["TS"]:Teleport(game.PlaceId, Player)
+	    else
+		    NSystem.Services["TS"]:TeleportToPlaceInstance(game.PlaceId, game.JobId, Playerr)
+	    end
+    end,
+    Name = "rejoin",
+    Description = "rejoins the game",
+})
+
+CommandFunctions.AddCommand({
+    Function = function(State)
+        if State == "false" or State == "off" then
+            AimlockConfig.State = false
+            ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+        elseif State == "true" or State == "on" then
+            AimlockConfig.State = true
+            ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+        end
+    end,
+    Name = "aimlock",
+    Description = "turns on aimlock",
+    ARGS = {
+        [1] = "bool/on/off"
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(Number)
+        AimlockConfig.DistanceTilSnap = Number
+        ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+    end,
+    Name = "snapdistance",
+    Description = "changes the distance minimum for snapping",
+    ARGS = {
+        [1] = "number"
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(string)
+        if string == "head" or string == "torso" then
+            AimlockConfig.AimAt = string
+            ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"]) 
+        end
+    end,
+    Name = "aimlockpart",
+    Description = "changes the part the aimlock aims for",
+    ARGS = {
+        [1] = "head/torso"
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(Number)
+        AimlockConfig.ProjDiv = Number
+        ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+    end,
+    Name = "pdiv",
+    Description = "changes the projectile division",
+    ARGS = {
+        [1] = "number"
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(Number)
+        AimlockConfig.VelocityDiv = Number
+        ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+    end,
+    Name = "vdiv",
+    Description = "changes the velocity division",
+    ARGS = {
+        [1] = "number"
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(R, G, B)
+        if R and R == "default" and not G and not B then
+            R = 102;
+            G = 51; 
+            B = 255;
+        end
+        if R and G and B then
+            ThemeConfig.ThemeColor = Color3.fromRGB(R, G, B)
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+            SetThemeColor(ThemeConfig.ThemeColor)
+        end
+    end,
+    Name = "themecolor",
+    Description = "changes theme color by Color3",
+    ARGS = {
+        [1] = "R",
+        [2] = "G",
+        [3] = "B"
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(id)
+        if tonumber(id) then
+            ThemeConfig.HitSound = tonumber(id)
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+        end
+    end,
+    Name = "hitsound",
+    Description = "changes hitsound by id",
+    ARGS = {
+        [1] = "id",
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(id)
+        if tonumber(id) then
+            ThemeConfig.CritSound = tonumber(id)
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+        end
+    end,
+    Name = "critsound",
+    Description = "changes critsound by id",
+    ARGS = {
+        [1] = "id",
+    }
+})
