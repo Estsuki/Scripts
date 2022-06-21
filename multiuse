@@ -691,8 +691,11 @@ CommandFunctions.AddCommand({
 
 CommandFunctions.AddCommand({
     Function = function(string)
-        if string == "head" or string == "torso" then
-            AimlockConfig.AimAt = string
+        if string == "head" then
+            AimlockConfig.AimAt = "Head"
+            ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"]) 
+	elseif string == "torso" then
+	    AimlockConfig.AimAt = "Torso"
             ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"]) 
         end
     end,
