@@ -34,7 +34,7 @@ getgenv().Encode = function(Table, Return)
 		for a,b in pairs(Table) do
 			local Value
 			if typeof(b) == "table" then
-				Value = module.Encode(b, true)
+				Value = Encode(b, true)
 			elseif typeof(b) == "Color3" then
 				Value = {R = math.floor(b.R * 255), G = math.floor(b.G * 255), B = math.floor(b.B * 255)}
 			elseif typeof(b) == "Vector3" then
@@ -57,7 +57,7 @@ getgenv().Decode = function(Table, Return)
 		for a,b in pairs(Table) do
 			local Value
 			if b.Class == "table" then
-				Value = module.Decode(b.Value, true) or {}
+				Value = Decode(b.Value, true) or {}
 			elseif b.Class == "Color3" then
 				Value = Color3.fromRGB(b.Value.R, b.Value.G, b.Value.B)
 			elseif b.Class == "Vector3" then
@@ -103,6 +103,31 @@ getgenv().Cache = {
 
 getgenv().GFunc = {}
 
+GFunc.GetPlayer = function(Name)
+	for a,b in ipairs(game.Players:GetPlayers()) do
+		if b.Name:sub(1, Name:len()):lower() == Name:lower() then
+			return b
+		end
+	end
+end
+
+GFunc.GetFullStringFromTable = function(Table, Name)
+	for a,b in ipairs(Table) do
+		if b:sub(1, Name:len()):lower() == Name:lower() then
+			return a, b
+		end
+	end
+end
+
+GFunc.Notify = function(Title, Message, Length, Icon)
+	game:GetService("StarterGui"):SetCore("SendNotification", {
+	    ['Title'] = Title;
+	    ['Text'] = Message;
+	    ['Duration'] = Length;
+	    ['Icon'] = Icon;
+	})
+end
+
 GFunc.LS = function(script)
 	return loadstring(script)()
 end
@@ -134,7 +159,7 @@ end
 GFunc.FindNearestPlayerByMouse = function(Whitelist)
     local Players = {}; local D = {}; PlayerInformation = {};
     for __, P in pairs(NSystem.Services["Players"]:GetPlayers()) do
-        if P ~= Player then
+        if P ~= Player and not table.find(Whitelist, P.Name) then
             table.insert(Players, P)
         end
     end
@@ -271,6 +296,7 @@ getgenv()["AimlockConfig"] = {
     UseVelocity = true,
     VelocityDiv = 7.5,
     ProjDiv = 2,
+    Whitelist = {},
 }; ConfigFunctions.LoadConfig("AimlockConfig", NSystem.ConfigFileNames["AL"], true)
 
 -- // CMD - CONFIG \\ --
@@ -425,7 +451,7 @@ AimlockRS = function(DT)
     if Cache.AimlockedPlayer then
         Target = Cache.AimlockedPlayer
     else
-        Target = GFunc.FindNearestPlayerByMouse()
+        Target = GFunc.FindNearestPlayerByMouse(AimlockConfig.Whitelist)
         if Target then
             Cache.AimlockedPlayer = Target
         end
@@ -777,5 +803,39 @@ CommandFunctions.AddCommand({
     Description = "changes critsound by id",
     ARGS = {
         [1] = "id",
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(playername)
+        local P = GFunc.GetPlayer(playername)
+        if P and not table.find(AimlockConfig.Whitelist, P.Name) then
+            table.insert(AimlockConfig.Whitelist, P.Name)
+            ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+            GFunc.Notify("Added to Whitelist", "Successfuly added " .. P.Name .. " to Whitelist", 5, nil)
+        elseif P and table.find(AimlockConfig.Whitelist, P.Name) then
+            GFunc.Notify("Whitelist", P.Name .. " is already in the Whitelist!", 5, nil)
+        end
+    end,
+    Name = "whitelist",
+    Description = "adds a player to the aimlock whitelist",
+    ARGS = {
+        [1] = "player",
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(playername)
+        local Index, Name = GFunc.GetFullStringFromTable(AimlockConfig.Whitelist, playername)
+        if Index and Name then
+            table.remove(AimlockConfig.Whitelist, Index)
+            ConfigFunctions.SaveConfig(AimlockConfig, NSystem.ConfigFileNames["AL"])
+            GFunc.Notify("Removed from Whitelist", "Successfuly removed " .. Name .. " from Whitelist", 5, nil)
+        end
+    end,
+    Name = "unwhitelist",
+    Description = "removes a player to the aimlock whitelist",
+    ARGS = {
+        [1] = "name",
     }
 })
