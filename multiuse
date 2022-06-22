@@ -97,6 +97,7 @@ getgenv().Cache = {
     Aimlock = false,
     AimlockedPlayer = nil,
     CurrentTool = nil,
+    ViewmodelModel = nil,
 }
 
 -- // GLOBAL FUNCTIONS \\ -- can be used anywhere and aren't specific to one function type
@@ -223,6 +224,25 @@ GFunc.CreateBeam = function(P1, P2, Color, Time)
     game:GetService("Debris"):AddItem(Part2, Time)
 end
 
+GFunc.SetViewModel = function(VN, Transparency)
+    for __, OBJ in pairs(Cache.ViewmodelModel:GetChildren()) do
+        if OBJ:IsA("BasePart") and OBJ.Name ~= "HumanoidRootPart" then
+            OBJ.Transparency = Transparency  
+        end
+    end
+end
+
+GFunc.SetModelVisiblity = function(Model, Transparency)
+    local Bool; if Transparency == 1 then Bool = false else Bool = true end
+    for __, B in pairs(Model:GetDescendants()) do
+        if B:IsA("BasePart") and B.Name ~= "BoundingBoxPart" or B:IsA("Texture") then
+            B.Transparency = Transparency
+        elseif B:IsA("ParticleEmitter") then
+            B.Enabled = Bool
+        end
+    end
+end
+
 -- // CONFIG FUNCTIONS \\ --
 
 ConfigFunctions.SaveConfig = function(ConfigTable, FileName)
@@ -263,6 +283,7 @@ getgenv()["ThemeConfig"] = {
     ThemeColor = Color3.fromRGB(102, 51, 255),
     HitSound = "2868331684",
     CritSound = "2320331820",
+    Viewmodels = true,
 }; ConfigFunctions.LoadConfig("ThemeConfig", NSystem.ConfigFileNames["TH"], true)
 
 getgenv().SetThemeColor = function(C3)
@@ -496,6 +517,8 @@ for i = 1, #Garbage do
     local Item = Garbage[i]
     if type(Item) == 'table' and rawget(Item, 'InvokeServer') and type(Item.InvokeServer) == 'function' then
 	    CWModules["Network"] = getsenv(getfenv(Item.InvokeServer).script)
+    elseif type(Item) == 'table' and rawget(Item, 'getViewmodelModel') and type(Item.getViewmodelModel) == 'function' then
+        CWModules["ViewmodelHandlerClient"] = Item--getsenv(getfenv(Item.getViewmodelModel).script)
     end
 end -- THANKS JACK 
 
@@ -572,6 +595,37 @@ getgenv().AimlockCalculate = function(Target, FirePoint, ProjectileVelocity)
     return Target.Position + (Target.Velocity / AimlockConfig.VelocityDiv) * t
 end
 
+-- // VIEW MODELS \\ --
+
+local UpdateViewModelsRS = function(DT)
+    local Char = Player.Character; if not Char then return end
+    local Head = Char:FindFirstChild("Head"); if not Head then return end
+    
+    if Head.LocalTransparencyModifier == 1 and ThemeConfig.Viewmodels == false then
+        local CC = Cache.CurrentTool
+        if CC and CombatWarriorsSpeeds[CC.Name] then
+            local Contents = CC:FindFirstChild("Contents")
+            if Contents then
+                local ToolHandle = Contents:FindFirstChild("Handle")
+                if ToolHandle then
+                    GFunc.SetModelVisiblity(ToolHandle, 1)
+                end
+            end
+        end
+    else
+        local CC = Cache.CurrentTool
+        if CC and CombatWarriorsSpeeds[CC.Name] then
+            local Contents = CC:FindFirstChild("Contents")
+            if Contents then
+                local ToolHandle = Contents:FindFirstChild("Handle")
+                if ToolHandle then
+                    GFunc.SetModelVisiblity(ToolHandle, 0)
+                end
+            end
+        end
+    end
+end
+
 -- // CONNECTIONS \\ --
 
 CharacterAdded = function(Character)
@@ -600,6 +654,15 @@ CharacterAdded = function(Character)
             Cache.CurrentTool = nil
         end
     end)
+    
+    -- [ VIEW MODEL ] --
+    
+    if CWModules["ViewmodelHandlerClient"] then
+        Cache.ViewmodelModel = getgenv().CWModules["ViewmodelHandlerClient"].getViewmodelModel()
+        if ThemeConfig.Viewmodels == false then
+            GFunc.SetViewModel(Cache.ViewmodelModel, 1)
+        end
+    end
 end; CharacterAdded(Player.Character)
 
 Connections.CharacterAdded = Player.CharacterAdded:Connect(CharacterAdded)
@@ -664,6 +727,7 @@ end)
 
 Connections.RS = NSystem.Services["RS"].Stepped:Connect(function(DT)
     DescriptionRS(DT)
+    UpdateViewModelsRS(DT)
     if CMDUI.CMDDescription.Visible == true then
         CMDUI.CMDDescription.Position = UDim2.new(0, Mouse.X + 15, 0, Mouse.Y)
     end
@@ -780,7 +844,10 @@ CommandFunctions.AddCommand({
 
 CommandFunctions.AddCommand({
     Function = function(id)
-        if tonumber(id) then
+        if id == "default" then
+            ThemeConfig.HitSound = 2868331684
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+        elseif tonumber(id) then
             ThemeConfig.HitSound = tonumber(id)
             ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
         end
@@ -788,13 +855,35 @@ CommandFunctions.AddCommand({
     Name = "hitsound",
     Description = "changes hitsound by id",
     ARGS = {
-        [1] = "id",
+        [1] = "id/default",
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(State)
+        if State == "false" or State == "off" then
+            ThemeConfig.Viewmodels = false
+            GFunc.SetViewModel(Cache.ViewmodelModel, 1)
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+        elseif State == "true" or State == "on" then
+            ThemeConfig.Viewmodels = true
+            GFunc.SetViewModel(Cache.ViewmodelModel, 0)
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+        end
+    end,
+    Name = "viewmodels",
+    Description = "Sets whether or not viewmodels are on or not",
+    ARGS = {
+        [1] = "bool/on/off",
     }
 })
 
 CommandFunctions.AddCommand({
     Function = function(id)
-        if tonumber(id) then
+        if id == "default" then
+            ThemeConfig.CritSound = 2320331820
+            ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
+        elseif tonumber(id) then
             ThemeConfig.CritSound = tonumber(id)
             ConfigFunctions.SaveConfig(ThemeConfig, NSystem.ConfigFileNames["TH"])
         end
@@ -802,7 +891,7 @@ CommandFunctions.AddCommand({
     Name = "critsound",
     Description = "changes critsound by id",
     ARGS = {
-        [1] = "id",
+        [1] = "id/default",
     }
 })
 
