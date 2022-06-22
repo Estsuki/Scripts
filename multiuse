@@ -751,6 +751,25 @@ CommandFunctions.AddCommand({
 })
 
 CommandFunctions.AddCommand({
+    Function = function()
+        local Servers = {}; local ServersJson = NSystem.Services["HTTP"]:JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+	    for __, Server in ipairs(ServersJson.data) do
+	        if Server.id ~= game.JobId and Server.maxPlayers > Server.playing then
+	           Servers[#Servers + 1] = Server.id
+            end
+	    end
+	    
+	    if #Servers > 0 then
+		    NSystem.Services["TS"]:TeleportToPlaceInstance(game.PlaceId, Servers[math.random(1, #Servers)])
+	    else
+	        GFunc.Notify("Serverhop", "No available server to hop to", 5, nil)
+	    end
+    end,
+    Name = "serverhop",
+    Description = "joins another random server",
+})
+
+CommandFunctions.AddCommand({
     Function = function(State)
         if State == "false" or State == "off" then
             AimlockConfig.State = false
