@@ -98,6 +98,8 @@ getgenv().Cache = {
     AimlockedPlayer = nil,
     CurrentTool = nil,
     ViewmodelModel = nil,
+    RespawnTeleport = false,
+    LastDied = nil,
 }
 
 -- // GLOBAL FUNCTIONS \\ -- can be used anywhere and aren't specific to one function type
@@ -519,6 +521,8 @@ for i = 1, #Garbage do
 	    CWModules["Network"] = getsenv(getfenv(Item.InvokeServer).script)
     elseif type(Item) == 'table' and rawget(Item, 'getViewmodelModel') and type(Item.getViewmodelModel) == 'function' then
         CWModules["ViewmodelHandlerClient"] = Item--getsenv(getfenv(Item.getViewmodelModel).script)
+    elseif type(Item) == 'table' and rawget(Item, 'pourFromPosition') and type(Item.pourFromPosition) == 'function' then
+        CWModules["Gas"] = Item
     end
 end -- THANKS JACK 
 
@@ -629,6 +633,23 @@ end
 -- // CONNECTIONS \\ --
 
 CharacterAdded = function(Character)
+    
+    if Cache.RespawnTeleport == true and Cache.LastDied then
+        for i = 1,100 do
+            game:GetService("RunService").RenderStepped:Wait()
+            Character:MoveTo(Cache.LastDied.Position)
+        end
+    end
+    
+    -- [ DIED ] --
+    
+    Character:WaitForChild("Humanoid").Died:Connect(function()
+        local HRP = Character:FindFirstChild("HumanoidRootPart")
+        if HRP then
+            Cache.LastDied = HRP.CFrame
+        end
+    end)
+    
     -- [ TOOL ADDED ] --
     
     Character.ChildAdded:Connect(function(C)
@@ -945,5 +966,41 @@ CommandFunctions.AddCommand({
     Description = "removes a player to the aimlock whitelist",
     ARGS = {
         [1] = "name",
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(playername)
+        local P = GFunc.GetPlayer(playername)
+        if P and P.Character and (Player.Backpack:FindFirstChild("Gas Can") or Player.Character:FindFirstChild("Gas Can")) then
+            local GasCan = Player.Backpack:FindFirstChild("Gas Can") or Player.Character:FindFirstChild("Gas Can")
+            GasCan.Parent = Player.Character
+            local Att = GasCan.Contents.Handle.PourAttachment
+            for i = 1,50 do
+                task.spawn(function()
+                CWModules["Gas"].pourFromPosition(GasCan, P.Character:FindFirstChild("HumanoidRootPart").Position + Vector3.new(math.random(-15, 15), 25, math.random(-15, 15)), Att.WorldCFrame.LookVector * Random.new():NextNumber(4, 6))
+                end)
+            end
+        end
+    end,
+    Name = "gas",
+    Description = "(RAGE) - places gasoline over a player must have gas can in inventory!",
+    ARGS = {
+        [1] = "player",
+    }
+})
+
+CommandFunctions.AddCommand({
+    Function = function(State)
+        if State == "false" or State == "off" then
+            Cache.RespawnTeleport = false
+        elseif State == "true" or State == "on" then
+            Cache.RespawnTeleport = true
+        end
+    end,
+    Name = "respawnteleport",
+    Description = "(RAGE) - turns on respawn teleport",
+    ARGS = {
+        [1] = "bool/on/off",
     }
 })
