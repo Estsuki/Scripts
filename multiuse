@@ -991,6 +991,24 @@ CommandFunctions.AddCommand({
 })
 
 CommandFunctions.AddCommand({
+    Function = function()
+        local Char = Player.Character; if not Char then return end
+        if Char and (Player.Backpack:FindFirstChild("Gas Can") or Player.Character:FindFirstChild("Gas Can")) then
+            local GasCan = Player.Backpack:FindFirstChild("Gas Can") or Player.Character:FindFirstChild("Gas Can")
+            GasCan.Parent = Player.Character
+            local Att = GasCan.Contents.Handle.PourAttachment
+            for i = 1,30 do
+                task.spawn(function()
+                CWModules["Gas"].pourFromPosition(GasCan, (Char:FindFirstChild("HumanoidRootPart").CFrame * CFrame.new(0, 0, -i * 3)).p, Att.WorldCFrame.LookVector * Random.new():NextNumber(4, 6))
+                end)
+            end
+        end
+    end,
+    Name = "gas2",
+    Description = "(RAGE) - places gasoline over a player must have gas can in inventory!",
+})
+
+CommandFunctions.AddCommand({
     Function = function(State)
         if State == "false" or State == "off" then
             Cache.RespawnTeleport = false
